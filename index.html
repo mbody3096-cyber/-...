@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>قصر الظلال — Level 1: ليلة الحفلة</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; background:#000; overflow:hidden; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  #app-canvas { position:fixed; inset:0; display:block; }
+
+  /* ---------- Start / Menu screen ---------- */
+  #start-screen {
+    position:fixed; inset:0; z-index:50;
+    background: radial-gradient(ellipse at center, #241417 0%, #0a0506 70%, #000 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#e8d9c5; text-align:center;
+  }
+  #start-screen h1 {
+    font-size: 3.2rem; letter-spacing:4px; font-weight:300;
+    color:#c9a86a; text-shadow:0 0 25px rgba(201,168,106,0.5);
+    margin-bottom:10px;
+  }
+  #start-screen p.sub { color:#8a7a6c; margin-bottom:40px; letter-spacing:2px; font-size:0.95rem;}
+  #start-screen button {
+    background:transparent; border:1px solid #c9a86a; color:#c9a86a;
+    padding:14px 46px; font-size:1.1rem; letter-spacing:3px; cursor:pointer;
+    transition:all .3s ease;
+  }
+  #start-screen button:hover { background:#c9a86a; color:#0a0506; }
+  #start-screen .hint { margin-top:26px; font-size:0.8rem; color:#5a4f47; max-width:520px; line-height:1.7;}
+  #loading-bar-wrap { width:340px; height:4px; background:#2b201c; margin-top:30px; display:none; }
+  #loading-bar { width:0%; height:100%; background:#c9a86a; transition:width .2s; }
+
+  /* ---------- HUD ---------- */
+  #hud { position:fixed; inset:0; z-index:20; pointer-events:none; display:none; color:#e8d9c5; }
+  #crosshair {
+    position:absolute; top:50%; left:50%; width:6px; height:6px;
+    margin:-3px 0 0 -3px; border-radius:50%; background:rgba(232,217,197,0.7);
+  }
+  #objective-box {
+    position:absolute; top:22px; left:22px; max-width:360px;
+    background:linear-gradient(90deg, rgba(10,5,6,0.75), transparent);
+    padding:10px 18px 10px 40px; border-right:2px solid #c9a86a;
+  }
+  #objective-box .label { font-size:0.7rem; letter-spacing:2px; color:#9c8770; }
+  #objective-box .text { font-size:0.95rem; margin-top:4px; }
+
+  #bottom-left-stats { position:absolute; bottom:24px; left:22px; width:220px; }
+  .stat-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .stat-label { width:26px; text-align:center; font-size:1.1rem; }
+  .stat-bar-bg { flex:1; height:8px; background:rgba(255,255,255,0.12); position:relative; }
+  .stat-bar-fill { height:100%; background:#a13b3b; transition: width .3s; }
+  #flash-bar-fill { background:#c9a86a; }
+
+  #evidence-counter {
+    position:absolute; bottom:24px; right:22px; text-align:left;
+    background:rgba(10,5,6,0.55); padding:8px 16px; border-left:2px solid #c9a86a;
+    font-size:0.9rem;
+  }
+  #evidence-counter .num { color:#c9a86a; font-size:1.3rem; font-weight:bold; }
+
+  #interact-prompt {
+    position:absolute; bottom:130px; left:50%; transform:translateX(-50%);
+    background:rgba(10,5,6,0.75); padding:8px 20px; border-radius:3px;
+    font-size:0.95rem; opacity:0; transition:opacity .15s; white-space:nowrap;
+  }
+  #interact-prompt.show { opacity:1; }
+  #interact-prompt kbd {
+    display:inline-block; border:1px solid #c9a86a; border-radius:3px;
+    padding:0 7px; margin-left:6px; color:#c9a86a;
+  }
+
+  /* ---------- Dialogue ---------- */
+  #dialogue-box {
+    position:fixed; z-index:30; left:50%; bottom:60px; transform:translateX(-50%);
+    width:min(640px, 84vw); background:rgba(10,6,7,0.9); border:1px solid #5a4534;
+    padding:18px 24px; color:#ecdfcc; display:none; pointer-events:auto;
+  }
+  #dialogue-box .speaker { color:#c9a86a; font-size:0.85rem; letter-spacing:2px; margin-bottom:8px; }
+  #dialogue-box .line { font-size:1rem; line-height:1.6; }
+  #dialogue-box .hint { margin-top:12px; font-size:0.75rem; color:#7a6c5e; }
+
+  /* ---------- Evidence / notification toast ---------- */
+  #toast {
+    position:fixed; z-index:40; top:90px; left:50%; transform:translateX(-50%) translateY(-10px);
+    background:rgba(10,6,7,0.9); border:1px solid #c9a86a; color:#e8d9c5;
+    padding:12px 26px; font-size:0.95rem; opacity:0; transition:all .4s ease; pointer-events:none;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------- Chase alert vignette ---------- */
+  #chase-vignette {
+    position:fixed; inset:0; z-index:15; pointer-events:none;
+    box-shadow: inset 0 0 180px 40px rgba(150,10,10,0.0);
+    transition: box-shadow .6s ease;
+  }
+  #chase-vignette.active { box-shadow: inset 0 0 220px 60px rgba(150,10,10,0.55); }
+
+  /* ---------- Pause / death / level-end overlays ---------- */
+  .overlay {
+    position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center;
+    flex-direction:column; background:rgba(0,0,0,0.88); color:#e8d9c5; text-align:center;
+  }
+  .overlay h2 { font-size:2.2rem; color:#c9a86a; letter-spacing:3px; margin-bottom:16px; font-weight:300; }
+  .overlay p { max-width:560px; line-height:1.8; color:#b6a894; margin-bottom:20px; }
+  .overlay button {
+    background:transparent; border:1px solid #c9a86a; color:#c9a86a;
+    padding:10px 30px; font-size:1rem; letter-spacing:2px; cursor:pointer; margin-top:10px;
+  }
+  .overlay button:hover { background:#c9a86a; color:#0a0506; }
+</style>
+</head>
+<body>
+
+<canvas id="app-canvas"></canvas>
+
+<div id="start-screen">
+  <h1>قصر الظلال</h1>
+  <p class="sub">LEVEL 1 — ليلة الحفلة</p>
+  <button id="btn-start">ابدأ التحقيق</button>
+  <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+  <p class="hint">
+    WASD للحركة · الماوس للنظر · E للتفاعل · Shift للجري · Ctrl للاختباء/الانحناء · Esc للإيقاف المؤقت<br/>
+    ملحوظة: يفضّل تشغيل الملف عبر سيرفر محلي (راجع README) بسبب قيود المتصفح على ES Modules.
+  </p>
+</div>
+
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="objective-box">
+    <div class="label">المهمة الحالية</div>
+    <div class="text" id="objective-text">استكشف الحفلة وابدأ التحقيق</div>
+  </div>
+  <div id="bottom-left-stats">
+    <div class="stat-row">
+      <div class="stat-label">❤</div>
+      <div class="stat-bar-bg"><div class="stat-bar-fill" id="health-fill" style="width:100%"></div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">🔦</div>
+      <div class="stat-bar-bg"><div class="stat-bar-fill" id="flash-bar-fill" style="width:100%"></div></div>
+    </div>
+  </div>
+  <div id="evidence-counter">الأدلة: <span class="num" id="evidence-count">0</span> / <span id="evidence-total">6</span></div>
+  <div id="interact-prompt"><span id="interact-text">اضغط E للتفاعل</span></div>
+</div>
+
+<div id="chase-vignette"></div>
+
+<div id="dialogue-box">
+  <div class="speaker" id="dlg-speaker">???</div>
+  <div class="line" id="dlg-line">...</div>
+  <div class="hint">اضغط E للمتابعة</div>
+</div>
+
+<div id="toast"></div>
+
+<div class="overlay" id="pause-overlay">
+  <h2>إيقاف مؤقت</h2>
+  <p>اضغط Esc أو الزر بالأسفل للعودة إلى القصر.</p>
+  <button id="btn-resume">استئناف</button>
+</div>
+
+<div class="overlay" id="death-overlay">
+  <h2>تم اكتشافك</h2>
+  <p id="death-text">أمسك بك الشخص الغامض في الظلام...</p>
+  <button id="btn-retry">إعادة المحاولة</button>
+</div>
+
+<div class="overlay" id="end-overlay">
+  <h2>نهاية Level 1</h2>
+  <p id="end-text"></p>
+  <button id="btn-restart">إعادة اللعب</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./src/game.js"></script>
+</body>
+</html>
